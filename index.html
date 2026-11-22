@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="BlockCraft: a Minecraft-style voxel sandbox built from scratch in the browser." />
+    <title>BlockCraft</title>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud" aria-hidden="true">
+      <div id="crosshair"></div>
+      <div id="itemname"></div>
+      <div id="hud-bottom"></div>
+      <div id="debug"></div>
+      <div id="toast"></div>
+    </div>
+    <div id="hurt"></div>
+    <div id="underwater"></div>
+
+    <main id="menu" class="screen active">
+      <h1 class="logo" aria-label="BlockCraft">BLOCKCRAFT<span class="splash">Built from scratch!</span></h1>
+      <div class="buttons">
+        <button class="mc-btn" id="btn-play" type="button">Singleplayer</button>
+        <button class="mc-btn" id="btn-creative" type="button">Creative Mode</button>
+        <button class="mc-btn" id="btn-controls" type="button" aria-expanded="false" aria-controls="controls-panel">Controls</button>
+      </div>
+      <section id="controls-panel" class="controls" hidden>
+        <h2>Controls</h2>
+        <ul>
+          <li><kbd>W A S D</kbd> move &middot; <kbd>Space</kbd> jump / swim</li>
+          <li><kbd>Ctrl</kbd> or double-tap <kbd>W</kbd> sprint &middot; <kbd>Shift</kbd> sneak</li>
+          <li><kbd>Left click</kbd> hold to mine, hit mobs, punch TNT</li>
+          <li><kbd>Right click</kbd> place block &middot; <kbd>Middle click</kbd> pick block</li>
+          <li><kbd>1-9</kbd> / <kbd>Wheel</kbd> hotbar &middot; <kbd>E</kbd> inventory</li>
+          <li><kbd>G</kbd> survival/creative &middot; <kbd>F</kbd> or double <kbd>Space</kbd> fly (creative)</li>
+          <li><kbd>F3</kbd> debug &middot; <kbd>Esc</kbd> pause</li>
+        </ul>
+      </section>
+      <p class="footer">Not affiliated with Mojang. All textures are generated in code.</p>
+    </main>
+
+    <div id="pause" class="screen dim">
+      <h2 class="title">Game Menu</h2>
+      <div class="buttons">
+        <button class="mc-btn" id="btn-resume" type="button">Back to Game</button>
+        <button class="mc-btn" id="btn-mode" type="button">Switch to Creative</button>
+        <label class="mc-slider">Render distance: <span id="rd-val">6</span>
+          <input id="rd" type="range" min="3" max="10" value="6" aria-label="Render distance in chunks" />
+        </label>
+        <button class="mc-btn" id="btn-reset" type="button">Generate New World</button>
+        <button class="mc-btn" id="btn-quit" type="button">Save and Quit to Title</button>
+      </div>
+    </div>
+
+    <div id="dead" class="screen red">
+      <h2 class="title big">You Died!</h2>
+      <p class="score">Score: <span id="score">0</span></p>
+      <div class="buttons">
+        <button class="mc-btn" id="btn-respawn" type="button">Respawn</button>
+        <button class="mc-btn" id="btn-dead-quit" type="button">Title Screen</button>
+      </div>
+    </div>
+
+    <div id="inventory" class="screen dim">
+      <div class="inv-panel" role="dialog" aria-label="Creative inventory">
+        <h2>Creative Inventory</h2>
+        <p class="hint">Click a block to put a stack into the selected hotbar slot</p>
+        <div id="inv-grid"></div>
+        <button class="mc-btn small" id="btn-inv-close" type="button">Done</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
