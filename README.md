@@ -21,7 +21,9 @@ Other scripts: `npm test` runs the engine unit tests, `npm run build` makes a st
 - Break blocks by holding left click (with crack stages and particles). Place blocks with right click. Middle click picks the block you are looking at.
 - A survival HUD with hearts, hunger and an XP bar, plus a 9-slot hotbar with stack counts and a held block or hand that bobs as you walk.
 - Fall damage, death and respawn.
-- Creative mode (press `C`) with flying (double-tap Space) and a block inventory (`E`).
+- Iron sword, pickaxe, shovel and axe in the hotbar. The right tool mines its blocks about 4× faster, stone is slow without a pickaxe, and the sword hits hardest. Bread restores hunger (right click).
+- An armor bar above the hearts. Armor blocks part of all damage.
+- Creative mode (press `G`) with flying (double-tap Space or `F`) and a block and tool inventory (`E`).
 - Creepers that chase you and explode, and passive pigs. TNT that you light with a click and that blows a crater.
 - Ambient-occlusion lighting with sky light, fog, drifting blocky clouds and a day/night cycle.
 - The world is saved to localStorage, with an in-memory fallback when storage is blocked.
@@ -36,11 +38,12 @@ Other scripts: `npm test` runs the engine unit tests, `npm run build` makes a st
 | Space | Jump (double-tap to fly in creative) |
 | Shift / Ctrl | Sneak (descend when flying) / sprint |
 | Left click (hold) | Break block |
-| Right click | Place block / light TNT |
+| Right click | Place block / eat bread |
 | Middle click | Pick block |
 | 1–9 / wheel | Select hotbar slot |
 | E | Inventory |
-| C | Toggle survival / creative |
+| G | Toggle survival / creative |
+| F | Toggle flying (creative) |
 | F3 | Debug info |
 | Esc | Pause menu |
 

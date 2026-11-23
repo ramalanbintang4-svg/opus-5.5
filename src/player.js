@@ -19,6 +19,7 @@ export class Player {
     this.headInWater = false;
     this.health = 20;
     this.hunger = 20;
+    this.armor = 12; // armor points (0-20), each point blocks 4% of damage
     this.xp = 0;
     this.fallStart = null;
     this.walkDist = 0;
@@ -49,6 +50,7 @@ export class Player {
   damage(amount, kx = 0, kz = 0) {
     if (this.creative || this.dead || amount <= 0) return false;
     if (this.hurtCooldown > 0) return false;
+    amount *= 1 - Math.min(20, this.armor) * 0.04;
     this.health = Math.max(0, this.health - amount);
     this.hurtCooldown = 0.5;
     this.hurtFlash = 0.35;

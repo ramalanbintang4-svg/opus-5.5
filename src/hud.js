@@ -1,12 +1,17 @@
 // Minecraft-style HUD: hotbar, hearts, hunger, XP bar, crosshair, creative inventory.
 import { BLOCKS, PLACEABLE, faceTile, TILE } from './blocks.js';
 import { drawItemIcon } from './textures.js';
+import { isItem, ITEMS, PALETTE, nameOf, TOOL_ITEMS } from './items.js';
 
 const COLORS = {
   K: [24, 6, 6, 255], R: [230, 24, 24, 255], W: [255, 210, 210, 255], D: [150, 10, 10, 255],
   E: [52, 20, 20, 210], M: [176, 104, 52, 255], N: [124, 66, 30, 255], B: [236, 226, 206, 255], O: [20, 20, 20, 255],
   G: [60, 40, 26, 210],
+  A: [222, 222, 226, 255], Q: [150, 150, 158, 255], e: [40, 40, 40, 200],
 };
+const ARMOR = ['KK.....KK', 'KAKKKKKAK', 'KAAAAAAQK', 'KKAAAAQKK', '.KAAAAQK.', '.KAAAAQK.', '.KAAAQQK.', '.KQQQQQK.', '.KKKKKKK.'];
+const ARMOR_EMPTY = ARMOR.map((r) => r.replace(/[AQ]/g, 'e'));
+const ARMOR_HALF = ARMOR.map((r) => r.split('').map((ch, x) => (x >= 4 && (ch === 'A' || ch === 'Q') ? 'e' : ch)).join(''));
 const HEART = ['.KK.KK...', 'KRWKRRK..', 'KWRRRRK..', 'KRRRRDK..', '.KRRDK...', '..KDK....', '...K.....'];
 const HEART_EMPTY = ['.KK.KK...', 'KEEKEEK..', 'KEEEEEK..', 'KEEEEEK..', '.KEEEK...', '..KEK....', '...K.....'];
 const FOOD = ['.....OO..', '....OBBO.', '....OBO..', '..OOMO...', '.OMMNO...', 'OMMMNO...', 'OMMNO....', '.ONO.....', '..O......'];
@@ -54,7 +59,24 @@ function selectorImage() {
   return c.toDataURL();
 }
 
+/** Flat pixel-art icon for a non-block item. */
+export function spriteIcon(sprite, size = 32) {
+  const n = sprite.length;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const k = size / n;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const rgb = PALETTE[sprite[y][x]];
+    if (!rgb) continue;
+    g.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    g.fillRect(Math.floor(x * k), Math.floor(y * k), Math.ceil(k), Math.ceil(k));
+  }
+  return c;
+}
+
 export function iconFor(atlas, id, size = 32) {
+  if (isItem(id)) return spriteIcon(ITEMS[id].sprite, size);
   const d = BLOCKS[id];
   return drawItemIcon(atlas, {
     top: faceTile(id, 'py'), left: faceTile(id, 'pz'), right: faceTile(id, 'px'), side: faceTile(id, 'px'),
@@ -70,6 +92,7 @@ export class HUD {
     this.img = {
       heart: sprite(HEART), heartHalf: sprite(HEART, 'left'), heartEmpty: sprite(HEART_EMPTY),
       food: sprite(FOOD), foodHalf: sprite(FOOD, 'left'), foodEmpty: sprite(FOOD_EMPTY),
+      armor: sprite(ARMOR), armorHalf: sprite(ARMOR_HALF), armorEmpty: sprite(ARMOR_EMPTY),
     };
     this.bottom.innerHTML = '';
     const mk = (cls, parent = this.bottom, tag = 'div') => { const e = document.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
@@ -81,7 +104,8 @@ export class HUD {
       const cnt = mk('count', s, 'span');
       this.slotEls.push({ s, cnt, icon: null, id: -1 });
     }
-    this.hearts = []; this.foods = [];
+    this.hearts = []; this.foods = []; this.armors = [];
+    for (let i = 0; i < 10; i++) { const h = mk('armor', this.bottom, 'img'); h.alt = ''; this.armors.push(h); }
     for (let i = 0; i < 10; i++) { const h = mk('heart', this.bottom, 'img'); h.alt = ''; this.hearts.push(h); }
     for (let i = 0; i < 10; i++) { const h = mk('food', this.bottom, 'img'); h.alt = ''; this.foods.push(h); }
     this.xp = mk('xpbar'); this.xpFill = mk('xpfill', this.xp); this.xpLevel = mk('xplevel');
@@ -109,6 +133,7 @@ export class HUD {
     this.slotEls.forEach((e, i) => P(e.s, 3 + i * 20, hy + 3, 16, 16));
     this.hearts.forEach((h, i) => P(h, i * 8, 0, 9, 7));
     this.foods.forEach((h, i) => P(h, 182 - 9 - i * 8, -1, 9, 9));
+    this.armors.forEach((h, i) => P(h, i * 8, -10, 9, 9));
     P(this.xp, 1, 12, 180, 3);
     P(this.xpLevel, 0, 4, 182, 8);
     this.layoutSel = (i) => P(this.sel, -1 + i * 20, hy - 1, 24, 24);
@@ -148,6 +173,16 @@ export class HUD {
       });
       L.hp = hp; L.flash = st.hurtFlash > 0;
     }
+    const ar = Math.round(st.armor || 0);
+    const showArmor = showBars && ar > 0;
+    if (L.ar !== ar || L.showArmor !== showArmor) {
+      this.armors.forEach((h, i) => {
+        const v = ar - i * 2;
+        h.src = v >= 2 ? this.img.armor : v === 1 ? this.img.armorHalf : this.img.armorEmpty;
+        h.style.visibility = showArmor ? 'visible' : 'hidden';
+      });
+      L.ar = ar; L.showArmor = showArmor;
+    }
     if (L.fd !== fd) {
       this.foods.forEach((h, i) => {
         const v = fd - i * 2;
@@ -170,11 +205,11 @@ export class HUD {
 export function buildInventory(hud, onPick) {
   const grid = document.getElementById('inv-grid');
   grid.innerHTML = '';
-  for (const id of PLACEABLE) {
+  for (const id of [...TOOL_ITEMS, ...PLACEABLE]) {
     const b = document.createElement('button');
     b.className = 'inv-slot';
-    b.title = BLOCKS[id].name;
-    b.setAttribute('aria-label', BLOCKS[id].name);
+    b.title = nameOf(id);
+    b.setAttribute('aria-label', nameOf(id));
     b.style.backgroundImage = `url(${hud.icon(id)})`;
     b.addEventListener('click', () => onPick(id));
     grid.appendChild(b);

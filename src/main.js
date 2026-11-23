@@ -3,6 +3,7 @@ import './style.css';
 import * as THREE from 'three';
 import { World, CHUNK } from './world.js';
 import { B, BLOCKS, dropOf } from './blocks.js';
+import { I, isItem, ITEMS, nameOf, validId, maxStack, breakTime, attackDamage } from './items.js';
 import { generateAtlas, generateCracks, generateMobTextures } from './textures.js';
 import { Renderer, geometryFrom } from './render.js';
 import { meshItem } from './mesher.js';
@@ -58,9 +59,10 @@ game.entities = entities;
 const hud = new HUD(atlas.canvas);
 
 const DEFAULT_SLOTS = [
-  { id: B.GRASS, count: 64 }, { id: B.PLANKS, count: 64 }, { id: B.COBBLE, count: 40 }, { id: B.LOG, count: 32 },
-  { id: B.GLASS, count: 24 }, { id: B.BRICK, count: 64 }, { id: B.TNT, count: 12 }, { id: B.SAND, count: 15 }, { id: B.POPPY, count: 8 },
+  { id: I.IRON_SWORD, count: 1 }, { id: I.IRON_PICKAXE, count: 1 }, { id: I.IRON_SHOVEL, count: 1 }, { id: I.IRON_AXE, count: 1 },
+  { id: B.PLANKS, count: 64 }, { id: B.COBBLE, count: 40 }, { id: B.GLASS, count: 24 }, { id: B.TNT, count: 12 }, { id: I.BREAD, count: 15 },
 ];
+const heldId = () => (game.slots[game.selected] ? game.slots[game.selected].id : 0);
 
 function newWorld(seed, edits) {
   if (game.world) {
@@ -110,12 +112,12 @@ function loadGame() {
     placePlayerAtSpawn();
   } else if (save && save.seed) {
     newWorld(save.seed, save.edits);
-    game.slots = (save.slots || DEFAULT_SLOTS).map((s) => (s && BLOCKS[s.id] ? { ...s } : null));
+    game.slots = (save.slots || DEFAULT_SLOTS).map((s) => (s && validId(s.id) ? { ...s } : null));
     const p = save.player;
     if (p) {
       Object.assign(player.pos, { x: p.x, y: p.y, z: p.z });
       player.yaw = p.yaw; player.pitch = p.pitch;
-      player.health = p.health ?? 20; player.hunger = p.hunger ?? 20; player.xp = p.xp ?? 0;
+      player.health = p.health ?? 20; player.hunger = p.hunger ?? 20; player.xp = p.xp ?? 0; player.armor = p.armor ?? 12;
       player.creative = !!p.creative; player.flying = !!p.flying && player.creative;
       ensureAround(Math.floor(p.x / CHUNK), Math.floor(p.z / CHUNK), 2);
     } else placePlayerAtSpawn();
@@ -137,7 +139,7 @@ function saveGame() {
     slots: game.slots,
     player: {
       x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch,
-      health: player.health, hunger: player.hunger, xp: player.xp, creative: player.creative, flying: player.flying,
+      health: player.health, hunger: player.hunger, armor: player.armor, xp: player.xp, creative: player.creative, flying: player.flying,
     },
   });
   game.world.editsDirty = false;
@@ -290,7 +292,7 @@ function toast(msg) {
 function selectSlot(i) {
   game.selected = i;
   const s = game.slots[i];
-  hud.showName(s ? BLOCKS[s.id].name : '');
+  hud.showName(s ? nameOf(s.id) : '');
 }
 
 function openInventory() {
@@ -300,7 +302,7 @@ function openInventory() {
 function closeInventory() { startPlaying(); }
 
 buildInventory(hud, (id) => {
-  game.slots[game.selected] = { id, count: 64 };
+  game.slots[game.selected] = { id, count: maxStack(id) };
   selectSlot(game.selected);
   sfx.pop();
 });
@@ -326,7 +328,9 @@ function updateTarget() {
 function attackOrStartBreak() {
   doSwing();
   if (mobTarget) {
-    entities.hurtMob(mobTarget, player.creative ? 6 : 3, player.pos.x, player.pos.z);
+    const dmg = attackDamage(heldId());
+    entities.hurtMob(mobTarget, player.creative ? Math.max(6, dmg) : dmg, player.pos.x, player.pos.z);
+    if (player.sprinting) { mobTarget.vel.x *= 1.5; mobTarget.vel.z *= 1.5; }
     return;
   }
   breaking = null;
@@ -335,7 +339,7 @@ function attackOrStartBreak() {
 
 function addItem(id) {
   if (player.creative) return;
-  for (const s of game.slots) if (s && s.id === id && s.count < 64) { s.count++; return; }
+  for (const s of game.slots) if (s && s.id === id && s.count < maxStack(id)) { s.count++; return; }
   for (let i = 0; i < 9; i++) if (!game.slots[i]) { game.slots[i] = { id, count: 1 }; return; }
 }
 
@@ -375,9 +379,9 @@ function updateBreaking(dt) {
     breaking = { x: target.x, y: target.y, z: target.z, progress: 0, sound: 0 };
   }
   if (breakCooldown > 0) return;
-  const hardness = BLOCKS[target.id].hardness;
-  if (hardness === Infinity) { R.showCrack(null, -1); return; }
-  breaking.progress += hardness <= 0 ? 1 : dt / (hardness * (player.onGround || player.inWater ? 1 : 3));
+  const time = breakTime(target.id, heldId());
+  if (time === Infinity) { R.showCrack(null, -1); return; }
+  breaking.progress += time <= 0 ? 1 : dt / (time * (player.onGround || player.inWater ? 1 : 3));
   breaking.sound -= dt;
   if (breaking.sound <= 0) { breaking.sound = 0.22; sfx.step(materialOf(target.id)); }
   if (swing >= 1) doSwing();
@@ -391,6 +395,7 @@ function updateBreaking(dt) {
 
 function usePlace() {
   const slot = game.slots[game.selected];
+  if (slot && isItem(slot.id)) { useItem(slot); return; }
   if (!target || !slot) return;
   const w = game.world;
   const id = slot.id;
@@ -416,6 +421,17 @@ function usePlace() {
     slot.count--;
     if (slot.count <= 0) game.slots[game.selected] = null;
   }
+}
+
+function useItem(slot) {
+  const def = ITEMS[slot.id];
+  if (!def.food || player.creative || player.hunger >= 20) return;
+  player.hunger = Math.min(20, player.hunger + def.food);
+  sfx.pop();
+  toast(`Ate ${def.name.toLowerCase()}`);
+  placeAnim = 1;
+  slot.count--;
+  if (slot.count <= 0) game.slots[game.selected] = null;
 }
 
 function pickBlock() {
@@ -458,7 +474,7 @@ $('btn-reset').addEventListener('click', () => {
   storage.remove(SAVE_KEY);
   newWorld(Math.floor(Math.random() * 1e9) + 1);
   game.slots = DEFAULT_SLOTS.map((s) => ({ ...s }));
-  Object.assign(player, { health: 20, hunger: 20, xp: 0, dead: false, flying: false });
+  Object.assign(player, { health: 20, hunger: 20, armor: 12, xp: 0, dead: false, flying: false });
   game.time = 0.16;
   placePlayerAtSpawn();
   spawnInitialMobs();
@@ -571,7 +587,7 @@ function frame(now) {
 
   // HUD
   hud.update(dt, {
-    slots: game.slots, selected: game.selected, health: player.health, hunger: player.hunger,
+    slots: game.slots, selected: game.selected, health: player.health, hunger: player.hunger, armor: player.armor,
     xpProgress: player.xpProgress, level: player.level, creative: player.creative, hurtFlash: player.hurtFlash,
   });
   $('hurt').style.opacity = String(Math.min(1, player.hurtFlash * 3));
@@ -627,7 +643,9 @@ if (params.has('selftest')) {
     setState('playing');
     await wait(300);
     const w = game.world;
+    const part = params.get('selftest') || 'all';
     log(player.onGround, `player on ground at y=${player.pos.y.toFixed(2)}`);
+    if (part !== 'mobs') {
     player.pitch = -0.9; updateTarget();
     const t0 = target;
     log(!!t0, `target below: ${t0 ? BLOCKS[t0.id].name : 'none'}`);
@@ -637,14 +655,49 @@ if (params.has('selftest')) {
     log(after >= before, `inventory ${before} -> ${after}`);
     await wait(300);
     updateTarget();
-    selectSlot(1);
+    const pk = game.slots.findIndex((s) => s && s.id === B.PLANKS);
+    selectSlot(pk);
     const t1 = target;
     usePlace();
     log(t1 && w.getBlock(t1.x + t1.nx, t1.y + t1.ny, t1.z + t1.nz) === B.PLANKS, 'placed planks');
-    log(game.slots[1].count === 63, `planks left ${game.slots[1].count}`);
+    log(game.slots[pk].count === 63, `planks left ${game.slots[pk].count}`);
+    log(breakTime(B.STONE, I.IRON_PICKAXE) < breakTime(B.STONE, 0) / 5, 'pickaxe speeds up stone');
+    log(attackDamage(I.IRON_SWORD) > attackDamage(0), 'sword hits harder than hand');
+    // real DOM input events: number key, mouse look, W to walk, held left button to mine
+    const key = (type, code) => document.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+    key('keydown', 'Digit3'); key('keyup', 'Digit3');
+    log(game.selected === 2 && heldId() === I.IRON_SHOVEL, `key 3 selects ${nameOf(heldId())}`);
+    const yaw0 = player.yaw;
+    document.dispatchEvent(new MouseEvent('mousemove', { movementX: -60, movementY: 0, buttons: 1, bubbles: true }));
+    log(Math.abs(player.yaw - yaw0) > 0.05, `mouse look turns yaw ${yaw0.toFixed(2)} -> ${player.yaw.toFixed(2)}`);
+    // face a direction with 3 clear blocks ahead at feet and head height
+    const free = (yw) => {
+      for (let k = 1; k <= 3; k++) {
+        const bx = Math.floor(player.pos.x - Math.sin(yw) * k), bz = Math.floor(player.pos.z - Math.cos(yw) * k);
+        const by = Math.floor(player.pos.y + 0.01);
+        if (BLOCKS[w.getBlock(bx, by, bz)].solid || BLOCKS[w.getBlock(bx, by + 1, bz)].solid) return false;
+      }
+      return true;
+    };
+    player.yaw = [yaw0, 0, Math.PI / 2, Math.PI, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4].find(free) ?? yaw0;
+    const p0 = { x: player.pos.x, z: player.pos.z };
+    key('keydown', 'KeyW'); await wait(500); key('keyup', 'KeyW');
+    const walked = Math.hypot(player.pos.x - p0.x, player.pos.z - p0.z);
+    log(walked > 0.5, `W walks forward ${walked.toFixed(2)} blocks`);
+    await wait(200);
+    player.pitch = -1.2; updateTarget();
+    const tm = target;
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+    const need = tm ? breakTime(tm.id, heldId()) : 0;
+    await wait(need * 1000 + 500);
+    document.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+    log(!!tm && w.getBlock(tm.x, tm.y, tm.z) !== tm.id, `holding left click mines ${tm ? BLOCKS[tm.id].name : 'nothing'} with ${nameOf(heldId())} (${need.toFixed(2)}s)`);
+    }
+    if (part !== 'input') {
     // TNT
     const hp0 = player.health;
-    const tx = Math.floor(player.pos.x) + 3, tz = Math.floor(player.pos.z), ty = w.surfaceY(tx, tz) + 1;
+    const tx = Math.floor(player.pos.x) + 2, tz = Math.floor(player.pos.z);
+    const ty = w.getBlock(tx, Math.floor(player.pos.y), tz) === B.AIR ? Math.floor(player.pos.y) : w.surfaceY(tx, tz) + 1;
     entities.primeTNT(tx, ty, tz, 1);
     await wait(1800);
     log(player.health < hp0, `TNT hurt player ${hp0} -> ${player.health}`);
@@ -655,7 +708,9 @@ if (params.has('selftest')) {
     await wait(2600);
     log(c.dead, 'creeper exploded next to player');
     log(entities.mobs.every((m) => m.model.group.parent), 'mob models in scene');
+    }
     log(fps > 0, `fps ${fps}, chunks ${w.chunks.size}`);
+    log(out.every((l) => l.startsWith('PASS')), 'SELFTEST DONE');
     const d = document.getElementById('debug');
     d.classList.add('on');
     d.innerHTML = out.map((l) => `<span>${l}</span>`).join('\n');

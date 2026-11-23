@@ -39,7 +39,7 @@ body.playing #hud, body.paused #hud, body.inv #hud { display: block; }
   text-shadow: calc(var(--gs) * 1px) 0 0 #000, calc(var(--gs) * -1px) 0 0 #000, 0 calc(var(--gs) * 1px) 0 #000, 0 calc(var(--gs) * -1px) 0 #000;
 }
 #itemname {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--gs) * 46px);
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--gs) * 56px);
   font-size: calc(var(--gs) * 9px); text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; opacity: 0; white-space: nowrap;
 }
 #toast {

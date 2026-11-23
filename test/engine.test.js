@@ -115,3 +115,50 @@ test('entity lands on the ground and is blocked by walls', () => {
   assert.ok(e.pos.z > 7 && e.pos.z < 7.31, `z=${e.pos.z}`);
   assert.equal(collides(w, e.pos.x, e.pos.y, e.pos.z, e.hw, e.h), false);
 });
+
+import { I, ITEMS, TOOL_ITEMS, ITEM_BASE, breakTime, attackDamage, extrudeSprite, isItem, validId, maxStack, PALETTE } from '../src/items.js';
+import { Player } from '../src/player.js';
+
+test('item sprites are 16x16 and only use palette colours', () => {
+  for (const id of TOOL_ITEMS) {
+    const def = ITEMS[id];
+    assert.ok(id >= ITEM_BASE && !BLOCKS[id], `${def.name} id does not clash with a block`);
+    assert.equal(def.sprite.length, 16, def.name);
+    for (const row of def.sprite) {
+      assert.equal(row.length, 16, `${def.name} row "${row}"`);
+      for (const ch of row) assert.ok(ch === '.' || PALETTE[ch], `${def.name} colour ${ch}`);
+    }
+  }
+});
+
+test('tools change mining speed and damage', () => {
+  assert.ok(breakTime(B.STONE, I.IRON_PICKAXE) < breakTime(B.STONE, 0) / 5);
+  assert.ok(breakTime(B.LOG, I.IRON_AXE) < breakTime(B.LOG, 0));
+  assert.ok(breakTime(B.DIRT, I.IRON_SHOVEL) < breakTime(B.DIRT, 0));
+  assert.equal(breakTime(B.DIRT, I.IRON_PICKAXE), breakTime(B.DIRT, 0), 'wrong tool gives no bonus');
+  assert.equal(breakTime(B.BEDROCK, I.IRON_PICKAXE), Infinity);
+  assert.equal(breakTime(B.TALL_GRASS, 0), 0);
+  assert.ok(attackDamage(I.IRON_SWORD) > attackDamage(I.IRON_AXE));
+  assert.ok(attackDamage(I.IRON_AXE) > attackDamage(0));
+  assert.ok(isItem(I.BREAD) && !isItem(B.STONE) && validId(B.STONE) && !validId(999));
+  assert.equal(maxStack(I.IRON_SWORD), 1);
+  assert.equal(maxStack(I.BREAD), 64);
+  assert.equal(maxStack(B.DIRT), 64);
+});
+
+test('extruded tool mesh is closed and well formed', () => {
+  const m = extrudeSprite(ITEMS[I.IRON_SWORD].sprite);
+  const verts = m.positions.length / 3;
+  assert.equal(m.colors.length, m.positions.length);
+  assert.ok(m.indices.length > 0 && m.indices.length % 6 === 0);
+  for (const i of m.indices) assert.ok(i < verts);
+  for (const v of m.positions) assert.ok(Math.abs(v) <= 0.5 + 1e-6);
+});
+
+test('armor reduces damage', () => {
+  const a = new Player(), b = new Player();
+  a.armor = 0; b.armor = 12;
+  a.damage(10); b.damage(10);
+  assert.equal(a.health, 10);
+  assert.ok(b.health > a.health && b.health < 20, `armored health ${b.health}`);
+});

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { meshChunk, meshItem } from './mesher.js';
 import { CHUNK } from './terrain.js';
 import { Simplex } from './noise.js';
+import { isItem, ITEMS, extrudeSprite } from './items.js';
 
 THREE.ColorManagement.enabled = false;
 
@@ -288,6 +289,22 @@ export class Renderer {
     this.handRoot.add(this.arm);
     this.heldMesh = null;
     this.heldId = -1;
+    this.heldIsTool = false;
+    this.toolMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
+    this.toolGeoms = new Map();
+  }
+
+  toolGeometry(id) {
+    if (!this.toolGeoms.has(id)) {
+      const d = extrudeSprite(ITEMS[id].sprite);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(d.positions, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(d.colors, 3));
+      g.setIndex(new THREE.BufferAttribute(d.indices, 1));
+      g.computeBoundingSphere();
+      this.toolGeoms.set(id, g);
+    }
+    return this.toolGeoms.get(id);
   }
 
   setArmTexture(canvas) { this.armMat.map = nearestTexture(canvas); this.armMat.needsUpdate = true; }
@@ -295,8 +312,17 @@ export class Renderer {
   setHeld(id) {
     if (id === this.heldId) return;
     this.heldId = id;
-    if (this.heldMesh) { this.handRoot.remove(this.heldMesh); this.heldMesh.geometry.dispose(); this.heldMesh = null; }
-    if (id) {
+    if (this.heldMesh) {
+      this.handRoot.remove(this.heldMesh);
+      if (!this.heldIsTool) this.heldMesh.geometry.dispose();
+      this.heldMesh = null;
+    }
+    this.heldIsTool = isItem(id);
+    if (this.heldIsTool) {
+      this.heldMesh = new THREE.Mesh(this.toolGeometry(id), this.toolMat);
+      this.heldMesh.rotation.order = 'YXZ';
+      this.handRoot.add(this.heldMesh);
+    } else if (id) {
       this.heldMesh = new THREE.Mesh(geometryFrom(meshItem(id)), this.itemMat);
       this.handRoot.add(this.heldMesh);
     }
@@ -312,7 +338,12 @@ export class Renderer {
     const by = -Math.abs(Math.cos(walk * Math.PI)) * 0.04 * bob;
     this.handRoot.position.set(0.5 + bx - sq * 0.22, -0.44 + by + Math.sin(Math.sqrt(s) * Math.PI * 2) * 0.1 - place * 0.08, -0.82 - sw * 0.12);
     this.handRoot.rotation.set(0, 0, 0);
-    if (this.heldMesh) {
+    if (this.heldMesh && this.heldIsTool) {
+      // tools: held diagonally, blade up and away, chopping down on swing
+      this.heldMesh.scale.setScalar(0.5);
+      this.heldMesh.rotation.set(-0.2 - sw * 1.1, Math.PI / 2 + 0.75 - sq * 0.3, 0.55);
+      this.heldMesh.position.set(0.0, 0.2 - sw * 0.05, -0.1);
+    } else if (this.heldMesh) {
       this.heldMesh.scale.setScalar(this.heldMesh.geometry.attributes.position.count === 8 ? 0.36 : 0.26);
       this.heldMesh.rotation.set(0.12 - sw * 0.7, Math.PI / 4 + 0.35 - sq * 0.4, 0);
       this.heldMesh.position.set(0, 0.05, 0);
@@ -321,6 +352,7 @@ export class Renderer {
     this.arm.rotation.set(-1.05 - sw * 0.9, 0.35 - sq * 0.5, 0.42 + sq * 0.3);
     this.armMat.color.setScalar(light);
     this.itemMat.color.setScalar(Math.max(0.35, light));
+    this.toolMat.color.setScalar(Math.max(0.35, light));
   }
 
   render() {
